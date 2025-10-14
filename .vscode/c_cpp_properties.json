@@ -5,6 +5,7 @@
       "includePath": [
         "${workspaceFolder}/**",
         "C:/Installed/SDL3/include",
+        "C:/Installed/glad/include",
         "C:/Installed"
       ],
       "compilerPath": "C:/Installed/mingw64/bin/gcc.exe",

@@ -2,6 +2,7 @@
 CXX = g++
 CXXFLAGS = -O2 -Wall -std=c++17 \
 	-I "C:/Installed/SDL3/include" \
+	-I "C:/Installed/glad/include" \
 	-I. \
 	-I "C:/Installed"
 
@@ -12,7 +13,7 @@ LDFLAGS = \
     -lopengl32 -lwinmm -ldsound -ldxguid -luser32 -lkernel32
 
 # Source and output
-SRC = main.cpp
+SRC = main.cpp C:/Installed/glad/src/glad.c
 OUT = art.exe
 
 # Build target
