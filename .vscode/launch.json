@@ -5,6 +5,7 @@
       "name": "C/C++ Runner: Debug Session",
       "type": "cppdbg",
       "request": "launch",
+      "preLaunchTask": "build",
       "program": "D:/cpp/Pendulum-Art/art.exe",
       "args": [],
       "stopAtEntry": false,
