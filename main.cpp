@@ -124,6 +124,7 @@ int main(int argc, char** argv) {
     GLint time_stepLoc = glGetUniformLocation(shaderProgram, "uTime_step");
     GLint time_totalLoc = glGetUniformLocation(shaderProgram, "uTime_total");
 
+    float test = 0.0001f;
     glUniform1f(gravLoc, -500.0f);
     glUniform1f(arm1_changeLoc, 0.01f);
     glUniform1f(arm2_changeLoc, 0.01f);
@@ -136,15 +137,18 @@ int main(int argc, char** argv) {
     bool running = true;
     SDL_Event e;
 
-    glClear(GL_COLOR_BUFFER_BIT);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);        
-    SDL_GL_SwapWindow(window);
-
+    
     while (running) {
+        test *= 1.01f;
+        glUniform1f(arm1_changeLoc, test);
+        glUniform1f(arm2_changeLoc, test);
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT)
                 running = false;
         }
+        glClear(GL_COLOR_BUFFER_BIT);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);        
+        SDL_GL_SwapWindow(window);
 
     }
 

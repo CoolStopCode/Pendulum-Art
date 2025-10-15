@@ -66,5 +66,5 @@ void main() {
         pendulum = calculate_pendulum(pendulum, uTime_step);
     }
 
-    FragColor = vec4(pendulum.arm1.theta, pendulum.arm2.theta, 0.0, 1.0);
+    FragColor = vec4(0.0, pendulum.arm2.theta, pendulum.arm1.theta, 1.0);
 }
