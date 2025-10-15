@@ -1,38 +1,23 @@
 #include <SDL3/SDL.h>
 #include <glad/glad.h>
 #include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
 
-// Vertex shader (pass-through)
-const char* vertexShaderSource = R"(
-#version 330 core
-layout(location = 0) in vec2 aPos;
-out vec2 vTexCoord;
-
-void main() {
-    vTexCoord = (aPos + 1.0) / 2.0; // Map from [-1,1] to [0,1]
-    gl_Position = vec4(aPos, 0.0, 1.0);
+std::string LoadFile(const std::string& path) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file: " << path << std::endl;
+        return "";
+    } else {
+        std::cout << "File opened successfully: " << path << std::endl;
+    }
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
 }
-)";
 
-// Fragment shader (checkerboard)
-const char* fragmentShaderSource = R"(
-#version 330 core
-in vec2 vTexCoord;
-out vec4 FragColor;
-
-uniform float uSize; // number of squares across screen
-
-void main() {
-    int x = int(floor(vTexCoord.x * uSize));
-    int y = int(floor(vTexCoord.y * uSize));
-    if ((x + y) % 2 == 0)
-        FragColor = vec4(0.0, 1.0, 1.0, 1.0); // white
-    else
-        FragColor = vec4(0.0, 0.0, 0.0, 1.0); // black
-}
-)";
-
-// Helper to compile shader
 GLuint CompileShader(GLenum type, const char* source) {
     GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, nullptr);
@@ -44,66 +29,77 @@ GLuint CompileShader(GLenum type, const char* source) {
         char info[512];
         glGetShaderInfoLog(shader, 512, nullptr, info);
         std::cerr << "Shader compilation error: " << info << std::endl;
+    } else {
+        std::cout << "Shader compiled successfully" << std::endl;
     }
     return shader;
 }
 
-int main() {
+GLuint CreateProgram(const std::string& vertPath, const std::string& fragPath) {
+    std::string vertSource = LoadFile(vertPath);
+    std::string fragSource = LoadFile(fragPath);
+
+    if (vertSource.empty() || fragSource.empty()) {
+        std::cerr << "Failed to load shader sources" << std::endl;
+        return 0;
+    } else {
+        std::cout << "Shader sources loaded successfully" << std::endl;
+    }
+
+
+    GLuint vertShader = CompileShader(GL_VERTEX_SHADER, vertSource.c_str());
+    GLuint fragShader = CompileShader(GL_FRAGMENT_SHADER, fragSource.c_str());
+
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vertShader);
+    glAttachShader(program, fragShader);
+    glLinkProgram(program);
+
+    GLint success;
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+
+    if (!success) {
+        char info[512];
+        glGetProgramInfoLog(program, 512, nullptr, info);
+        std::cerr << "Program link error: " << info << std::endl;
+    } else {
+        std::cout << "Program linked successfully" << std::endl;
+    }
+
+    glDeleteShader(vertShader);
+    glDeleteShader(fragShader);
+    return program;
+}
+
+int main(int argc, char** argv) {
     if (SDL_Init(SDL_INIT_VIDEO) != 1) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << std::endl;
         return 1;
+    } else {
+        std::cout << "SDL_Init succeeded" << std::endl;
     }
 
-    // Request OpenGL 3.3 Core context
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
-    SDL_Window* window = SDL_CreateWindow("GLAD Checkerboard",
-                                          800, 600,
+    SDL_Window* window = SDL_CreateWindow("Pendulum Art",
+                                          1000, 1000,
                                           SDL_WINDOW_OPENGL);
-
     SDL_GLContext glContext = SDL_GL_CreateContext(window);
-    if (!glContext) {
-        std::cerr << "Failed to create OpenGL context: " << SDL_GetError() << std::endl;
-        return 1;
-    }
 
-    // Initialize GLAD
     if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
-        std::cerr << "Failed to initialize GLAD\n";
+        std::cerr << "Failed to initialize GLAD" << std::endl;
         return 1;
     }
 
-    // Compile shaders
-    GLuint vertexShader = CompileShader(GL_VERTEX_SHADER, vertexShaderSource);
-    GLuint fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragmentShaderSource);
+    GLuint shaderProgram = CreateProgram("shader.vert", "shader.frag");
 
-    // Link shader program
-    GLuint shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
+    if (!shaderProgram) return 1;
 
-    GLint success;
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success) {
-        char info[512];
-        glGetProgramInfoLog(shaderProgram, 512, nullptr, info);
-        std::cerr << "Shader program link error: " << info << std::endl;
-    }
-
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-    // Fullscreen quad
     float vertices[] = {
         -1.0f, -1.0f,
          1.0f, -1.0f,
          1.0f,  1.0f,
         -1.0f,  1.0f
     };
-    unsigned int indices[] = { 0, 1, 2, 2, 3, 0 };
+    unsigned int indices[] = {0, 1, 2, 2, 3, 0};
 
     GLuint VAO, VBO, EBO;
     glGenVertexArrays(1, &VAO);
@@ -111,36 +107,48 @@ int main() {
     glGenBuffers(1, &EBO);
 
     glBindVertexArray(VAO);
-
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
     glUseProgram(shaderProgram);
-    GLint sizeLoc = glGetUniformLocation(shaderProgram, "uSize");
-    glUniform1f(sizeLoc, 8.0f); // 8x8 checkerboard
+
+    GLint gravLoc = glGetUniformLocation(shaderProgram, "uGrav");
+    GLint arm1_changeLoc = glGetUniformLocation(shaderProgram, "uArm1_change");
+    GLint arm2_changeLoc = glGetUniformLocation(shaderProgram, "uArm2_change");
+    GLint arm1_startLoc = glGetUniformLocation(shaderProgram, "uArm1_start");
+    GLint arm2_startLoc = glGetUniformLocation(shaderProgram, "uArm2_start");
+    GLint time_stepLoc = glGetUniformLocation(shaderProgram, "uTime_step");
+    GLint time_totalLoc = glGetUniformLocation(shaderProgram, "uTime_total");
+
+    glUniform1f(gravLoc, 10.0f);
+    glUniform1f(arm1_changeLoc, 1.0f);
+    glUniform1f(arm2_changeLoc, 1.0f);
+    glUniform1f(arm1_startLoc, 0.0f);
+    glUniform1f(arm2_startLoc, 0.0f);
+    glUniform1f(time_stepLoc, 0.0f);
+    glUniform1f(time_totalLoc, 0.0f);
+
 
     bool running = true;
-    SDL_Event event;
+    SDL_Event e;
     while (running) {
-        while (SDL_PollEvent(&event))
-            if (event.type == SDL_EVENT_QUIT)
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_EVENT_QUIT)
                 running = false;
-
+        }
         glClear(GL_COLOR_BUFFER_BIT);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         SDL_GL_SwapWindow(window);
     }
 
-    glDeleteVertexArrays(1, &VAO);
+    glDeleteProgram(shaderProgram);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
-    glDeleteProgram(shaderProgram);
+    glDeleteVertexArrays(1, &VAO);
 
     SDL_GL_DestroyContext(glContext);
     SDL_DestroyWindow(window);
