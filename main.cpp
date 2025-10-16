@@ -124,7 +124,10 @@ int main(int argc, char** argv) {
     GLint time_stepLoc = glGetUniformLocation(shaderProgram, "uTime_step");
     GLint time_totalLoc = glGetUniformLocation(shaderProgram, "uTime_total");
 
-    float test = 0.0001f;
+    float cam_zoom = 0.00001f;
+    float cam_x = 0.0f;
+    float cam_y = 0.0f;
+
     glUniform1f(gravLoc, -500.0f);
     glUniform1f(arm1_changeLoc, 0.01f);
     glUniform1f(arm2_changeLoc, 0.01f);
@@ -139,9 +142,37 @@ int main(int argc, char** argv) {
 
     
     while (running) {
-        test *= 1.01f;
-        glUniform1f(arm1_changeLoc, test);
-        glUniform1f(arm2_changeLoc, test);
+        if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("W")]) {
+            cam_y += 0.005f * cam_zoom;
+        }
+        if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("S")]) {
+            cam_y -= 0.005f * cam_zoom;
+        }
+        if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("A")]) {
+            cam_x -= 0.005f * cam_zoom;
+        }
+        if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("D")]) {
+            cam_x += 0.005f * cam_zoom;
+        }
+        if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("Up")]) {
+            float old_cam_zoom = cam_zoom;
+            cam_zoom *= 1.01f;
+            cam_x += 0.5f * (old_cam_zoom - cam_zoom);
+            cam_y += 0.5f * (old_cam_zoom - cam_zoom);
+
+        }
+        if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("Down")]) {
+            float old_cam_zoom = cam_zoom;
+            cam_zoom *= 0.99f;
+            cam_x += 0.5f * (old_cam_zoom - cam_zoom);
+            cam_y += 0.5f * (old_cam_zoom - cam_zoom);
+        }
+
+        glUniform1f(arm1_changeLoc, cam_zoom);
+        glUniform1f(arm2_changeLoc, cam_zoom);
+        glUniform1f(arm1_startLoc, cam_x);
+        glUniform1f(arm2_startLoc, cam_y);
+        
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT)
                 running = false;
