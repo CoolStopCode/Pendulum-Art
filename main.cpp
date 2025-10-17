@@ -131,6 +131,7 @@ int main(int argc, char** argv) {
 
 
     GLint gravLoc = glGetUniformLocation(shaderProgram, "uGrav");
+    GLint damping = glGetUniformLocation(shaderProgram, "uDamping");
     GLint scaleX = glGetUniformLocation(shaderProgram, "uScaleX");
     GLint scaleY = glGetUniformLocation(shaderProgram, "uScaleY");
     GLint camX = glGetUniformLocation(shaderProgram, "uCamX");
@@ -139,12 +140,15 @@ int main(int argc, char** argv) {
     GLint time_totalLoc = glGetUniformLocation(shaderProgram, "uTime_total");
 
     float slider_gravLoc = -500.0f;
+    float slider_dampingLoc = 0.0f;
     float slider_time_stepLoc = 0.1f;
     float slider_time_totalLoc = 0.5f;
 
     float cam_zoom = 0.00001f;
     float cam_x = 0.0f;
     float cam_y = 0.0f;
+
+    bool live_play = false;
 
     bool running = true;
     SDL_Event e;
@@ -177,6 +181,7 @@ int main(int argc, char** argv) {
             cam_y += 0.5f * (old_cam_zoom - cam_zoom);
         }
 
+        glUniform1f(damping, slider_dampingLoc);
         glUniform1f(gravLoc, slider_gravLoc);
         glUniform1f(time_stepLoc, slider_time_stepLoc);
         glUniform1f(time_totalLoc, slider_time_totalLoc);
@@ -204,9 +209,17 @@ int main(int argc, char** argv) {
         ImGui::Text("ImGui with SDL3 and OpenGL3");
 
         ImGui::SliderFloat("Gravity", &slider_gravLoc, 5000.0f, -5000.0f, "Value: %1.0f");
-        ImGui::SliderFloat("Time Step (Accuracy)", &slider_time_stepLoc, 0.01f, 0.5f, "Value: %.3f");
+        ImGui::SliderFloat("Time Step (Accuracy)", &slider_time_stepLoc, 0.001f, 0.5f, "Value: %.3f");
         ImGui::SliderFloat("Time Total", &slider_time_totalLoc, 0.01f, 10.0f, "Value: %0.2f");
+        ImGui::SliderFloat("Damping", &slider_dampingLoc, -10.0f, 10.0f, "Value: %0.2f");
 
+        ImGui::Checkbox("Live Play", &live_play);
+        if (live_play) {
+            slider_time_totalLoc = slider_time_totalLoc + slider_time_stepLoc;
+            if (slider_time_totalLoc > 10.0f) {
+                slider_time_totalLoc = 0.0f;
+            }
+        }
 
         ImGui::End();
 
