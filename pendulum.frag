@@ -4,10 +4,10 @@ out vec4 FragColor;
 
 uniform float uGrav; // number of squares across screen
 
-uniform float uArm1_change;
-uniform float uArm2_change;
-uniform float uArm1_start;
-uniform float uArm2_start;
+uniform float uScaleX;
+uniform float uScaleY;
+uniform float uCamX;
+uniform float uCamY;
 
 uniform float uTime_step;
 uniform float uTime_total;
@@ -58,13 +58,17 @@ Pendulum calculate_pendulum(Pendulum p, float delta) {
 }
 
 void main() {
-    float arm1_rot = vTexCoord.x * uArm1_change + uArm1_start;
-    float arm2_rot = vTexCoord.y * uArm2_change + uArm2_start;
+    float arm1_rot = vTexCoord.x * uScaleX + uCamX;
+    float arm2_rot = vTexCoord.y * uScaleY + uCamY;
 
     Pendulum pendulum = Pendulum(Arm(0.0, 0.0, arm1_rot, 1.0, 0.0), Arm(0.0, 0.0, arm2_rot, 1.0, 0.0));
     for (float i = 0.0; i < uTime_total; i += uTime_step) {
-        pendulum = calculate_pendulum(pendulum, uTime_step);
+        float dt = uTime_step;
+        if (i + uTime_step > uTime_total) {
+            dt = uTime_total - i;
+        }
+        pendulum = calculate_pendulum(pendulum, dt);
     }
 
-    FragColor = vec4(0.0, pendulum.arm2.theta, pendulum.arm1.theta, 1.0);
+    FragColor = vec4(0.0, mod(pendulum.arm2.theta / 6.28, 1.0), mod(pendulum.arm1.theta / 6.28, 1.0), 1.0);
 }

@@ -1,5 +1,10 @@
 #include <SDL3/SDL.h>
 #include <glad/glad.h>
+
+#include <imgui.h>
+#include <imgui_impl_sdl3.h>
+#include <imgui_impl_opengl3.h>
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -89,7 +94,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    GLuint shaderProgram = CreateProgram("shader.vert", "shader.frag");
+    GLuint shaderProgram = CreateProgram("shader.vert", "pendulum.frag");
 
     if (!shaderProgram) return 1;
 
@@ -116,26 +121,30 @@ int main(int argc, char** argv) {
 
     glUseProgram(shaderProgram);
 
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    // Initialize SDL3 + OpenGL backend
+    ImGui_ImplSDL3_InitForOpenGL(window, glContext);
+    ImGui_ImplOpenGL3_Init("#version 330");
+
+
     GLint gravLoc = glGetUniformLocation(shaderProgram, "uGrav");
-    GLint arm1_changeLoc = glGetUniformLocation(shaderProgram, "uArm1_change");
-    GLint arm2_changeLoc = glGetUniformLocation(shaderProgram, "uArm2_change");
-    GLint arm1_startLoc = glGetUniformLocation(shaderProgram, "uArm1_start");
-    GLint arm2_startLoc = glGetUniformLocation(shaderProgram, "uArm2_start");
+    GLint scaleX = glGetUniformLocation(shaderProgram, "uScaleX");
+    GLint scaleY = glGetUniformLocation(shaderProgram, "uScaleY");
+    GLint camX = glGetUniformLocation(shaderProgram, "uCamX");
+    GLint camY = glGetUniformLocation(shaderProgram, "uCamY");
     GLint time_stepLoc = glGetUniformLocation(shaderProgram, "uTime_step");
     GLint time_totalLoc = glGetUniformLocation(shaderProgram, "uTime_total");
+
+    float slider_gravLoc = -500.0f;
+    float slider_time_stepLoc = 0.1f;
+    float slider_time_totalLoc = 0.5f;
 
     float cam_zoom = 0.00001f;
     float cam_x = 0.0f;
     float cam_y = 0.0f;
-
-    glUniform1f(gravLoc, -500.0f);
-    glUniform1f(arm1_changeLoc, 0.01f);
-    glUniform1f(arm2_changeLoc, 0.01f);
-    glUniform1f(arm1_startLoc, 0.0f);
-    glUniform1f(arm2_startLoc, 0.0f);
-    glUniform1f(time_stepLoc, 0.1f);
-    glUniform1f(time_totalLoc, 0.5f);
-
 
     bool running = true;
     SDL_Event e;
@@ -168,17 +177,47 @@ int main(int argc, char** argv) {
             cam_y += 0.5f * (old_cam_zoom - cam_zoom);
         }
 
-        glUniform1f(arm1_changeLoc, cam_zoom);
-        glUniform1f(arm2_changeLoc, cam_zoom);
-        glUniform1f(arm1_startLoc, cam_x);
-        glUniform1f(arm2_startLoc, cam_y);
+        glUniform1f(gravLoc, slider_gravLoc);
+        glUniform1f(time_stepLoc, slider_time_stepLoc);
+        glUniform1f(time_totalLoc, slider_time_totalLoc);
+
+        glUniform1f(scaleX, cam_zoom);
+        glUniform1f(scaleY, cam_zoom);
+        glUniform1f(camX, cam_x);
+        glUniform1f(camY, cam_y);
         
         while (SDL_PollEvent(&e)) {
+            ImGui_ImplSDL3_ProcessEvent(&e);
+
             if (e.type == SDL_EVENT_QUIT)
                 running = false;
         }
+
+
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
+        ImGui::NewFrame();
+
+        // Your GUI code here
+        ImGui::Begin("Parameters");
+        ImGui::Text("ImGui with SDL3 and OpenGL3");
+
+        ImGui::SliderFloat("Gravity", &slider_gravLoc, 5000.0f, -5000.0f, "Value: %1.0f");
+        ImGui::SliderFloat("Time Step (Accuracy)", &slider_time_stepLoc, 0.01f, 0.5f, "Value: %.3f");
+        ImGui::SliderFloat("Time Total", &slider_time_totalLoc, 0.01f, 10.0f, "Value: %0.2f");
+
+
+        ImGui::End();
+
+        // Rendering
+        ImGui::Render();
+
+
         glClear(GL_COLOR_BUFFER_BIT);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);        
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0); 
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
         SDL_GL_SwapWindow(window);
 
     }
@@ -187,6 +226,10 @@ int main(int argc, char** argv) {
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
     glDeleteVertexArrays(1, &VAO);
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
 
     SDL_GL_DestroyContext(glContext);
     SDL_DestroyWindow(window);
