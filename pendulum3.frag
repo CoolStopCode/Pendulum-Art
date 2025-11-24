@@ -3,11 +3,14 @@ in vec2 vTexCoord;
 out vec4 FragColor;
 
 uniform float uGrav; // number of squares across screen
+uniform float uDamping;
+uniform float uArm1Length;
+uniform float uArm2Length;
 
-uniform float uArm1_change;
-uniform float uArm2_change;
-uniform float uArm1_start;
-uniform float uArm2_start;
+uniform float uScaleX;
+uniform float uScaleY;
+uniform float uCamX;
+uniform float uCamY;
 
 uniform float uTime_step;
 uniform float uTime_total;
@@ -16,8 +19,6 @@ struct Arm {
     float alpha; // angular acceleration (derivative of omega)
     float omega; // angular velocity (derivative of theta)
     float theta; // rotation
-    float length;
-    float damping;
 };
 
 struct Pendulum {
@@ -28,14 +29,14 @@ struct Pendulum {
 
 Pendulum calculate_pendulum(Pendulum p, float delta) {
     float g = uGrav;
-    float L1 = p.arm1.length;
-    float L2 = p.arm2.length;
+    float L1 = uArm1Length;
+    float L2 = uArm2Length;
     float th1 = p.arm1.theta;
     float th2 = p.arm2.theta;
     float w1  = p.arm1.omega;
     float w2  = p.arm2.omega;
-    float d1  = p.arm1.damping;
-    float d2  = p.arm2.damping;
+    float d1  = uDamping;
+    float d2  = uDamping;
 
     float diff = th1 - th2;
     float denom = 2.0 - cos(2.0*diff);
@@ -50,20 +51,24 @@ Pendulum calculate_pendulum(Pendulum p, float delta) {
     th1 = th1 + w1 * delta;
     th2 = th2 + w2 * delta;
 
-    Arm newArm1 = Arm(a1, w1, th1, L1, d1);
-    Arm newArm2 = Arm(a2, w2, th2, L2, d2);
+    Arm newArm1 = Arm(a1, w1, th1, L1);
+    Arm newArm2 = Arm(a2, w2, th2, L2);
 
     Pendulum newPendulum = Pendulum(newArm1, newArm2);
     return newPendulum;
 }
 
 void main() {
-    float arm1_rot = vTexCoord.x * uArm1_change + uArm1_start;
-    float arm2_rot = vTexCoord.y * uArm2_change + uArm2_start;
+    float arm1_rot = vTexCoord.x * uScaleX + uCamX;
+    float arm2_rot = vTexCoord.y * uScaleY + uCamY;
 
-    Pendulum pendulum = Pendulum(Arm(0.0, 0.0, arm1_rot, 1.0, 0.0), Arm(0.0, 0.0, arm2_rot, 1.0, 0.0));
+    Pendulum pendulum = Pendulum(Arm(0.0, 0.0, arm1_rot, 1.0), Arm(0.0, 0.0, arm2_rot, 1.0));
     for (float i = 0.0; i < uTime_total; i += uTime_step) {
-        pendulum = calculate_pendulum(pendulum, uTime_step);
+        float dt = uTime_step;
+        if (i + uTime_step > uTime_total) {
+            dt = uTime_total - i;
+        }
+        pendulum = calculate_pendulum(pendulum, dt);
     }
 
     FragColor = vec4(0.0, mod(pendulum.arm2.theta / 6.28, 1.0), mod(pendulum.arm1.theta / 6.28, 1.0), 1.0);
