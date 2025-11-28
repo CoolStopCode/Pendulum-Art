@@ -140,6 +140,80 @@ void exportFractalToPNG(GLuint shaderProgram, GLuint VAO, int windowW, int windo
     glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
 }
 
+std::pair<float, float> processPendulum(float vTexCoordx, float vTexCoordy, 
+                                        float uGrav, float uDamping, float uArm1Length, float uArm2Length, 
+                                        float uScaleX, float uScaleY, float uCamX, float uCamY, 
+                                        float uTime_step, float uTime_total) {
+    struct Arm {
+        float alpha; // angular acceleration (derivative of omega)
+        float omega; // angular velocity (derivative of theta)
+        float theta; // rotation
+
+        Arm(float a, float o, float t) : alpha(a), omega(o), theta(t) {}
+    };
+
+    struct Pendulum {
+        Arm arm1;
+        Arm arm2;
+
+        Pendulum(const Arm& a1, const Arm& a2) : arm1(a1), arm2(a2) {}
+    };
+
+    float g = uGrav;
+    float L1 = uArm1Length;
+    float L2 = uArm2Length;
+    float d1  = uDamping;
+    float d2  = uDamping;
+
+    float arm1_rot = vTexCoordx * uScaleX + uCamX;
+    float arm2_rot = vTexCoordy * uScaleY + uCamY;
+
+    Pendulum pendulum = Pendulum(Arm(0.0, 0.0, arm1_rot), Arm(0.0, 0.0, arm2_rot));
+
+    for (float i = 0.0; i < uTime_total; i += uTime_step) {
+        float dt = uTime_step;
+        if (i + uTime_step > uTime_total) {
+            dt = uTime_total - i;
+        }
+        float th1 = pendulum.arm1.theta;
+        float th2 = pendulum.arm2.theta;
+        float w1  = pendulum.arm1.omega;
+        float w2  = pendulum.arm2.omega;
+        
+        float diff = th1 - th2;
+        float denom = 2.0 - cos(2.0*diff);
+
+        float a1 = (-g*(2.0*sin(th1) + sin(th1 - 2.0*th2))
+                    - 2.0*sin(diff)*(w2*w2*L2 + w1*w1*L1*cos(diff))) / (L1*denom);
+        float a2 = (2.0*sin(diff)*(w1*w1*L1 + g*cos(th1) + w2*w2*L2*cos(diff))) / (L2*denom);
+
+        w1 = w1 + (a1 - d1*w1) * dt;
+        w2 = w2 + (a2 - d2*w2) * dt;
+        th1 = th1 + w1 * dt;
+        th2 = th2 + w2 * dt;
+
+        Arm newArm1 = Arm(a1, w1, th1);
+        Arm newArm2 = Arm(a2, w2, th2);
+
+        pendulum = Pendulum(newArm1, newArm2);
+    }
+
+    return std::make_pair(pendulum.arm1.theta, pendulum.arm2.theta);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 std::string LoadFile(const std::string& path) {
     std::ifstream file(path);
@@ -219,6 +293,7 @@ int main(int argc, char** argv) {
                                           1000, 1000,
                                           SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     SDL_GLContext glContext = SDL_GL_CreateContext(window);
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL); 
 
     if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
         std::cerr << "Failed to initialize GLAD" << std::endl;
@@ -342,6 +417,16 @@ int main(int argc, char** argv) {
                 running = false;
         }
 
+        float uvx, uvy;
+        SDL_GetMouseState(&uvx, &uvy);
+        uvx /= 1000.0f;
+        uvy /= 1000.0f;
+
+        auto [theta1, theta2] = processPendulum(uvx, uvy, slider_gravLoc, slider_dampingLoc, slider_arm1_lenLoc, slider_arm2_lenLoc, cam_zoom, cam_zoom, cam_x, cam_y, slider_time_stepLoc, slider_time_totalLoc);
+        std::cout << theta1 << " " << theta2 << "\n";
+
+        
+
 
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -381,6 +466,41 @@ int main(int argc, char** argv) {
                             cam_zoom, cam_zoom, cam_x, cam_y);
         }
 
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2 windowPos = ImGui::GetWindowPos(); 
+        ImVec2 windowSize = ImGui::GetContentRegionAvail(); 
+
+
+        const float PENDULUM_SCALE = 200.0f; 
+        ImVec2 ORIGIN_PIXEL = ImVec2(
+            windowPos.x + windowSize.x * 0.5f,
+            windowPos.y + windowSize.y * 0.2f
+        ); 
+
+
+        float p1_x = ORIGIN_PIXEL.x + PENDULUM_SCALE * slider_arm1_lenLoc * std::sin(theta1);
+        float p1_y = ORIGIN_PIXEL.y + PENDULUM_SCALE * slider_arm1_lenLoc * std::cos(theta1);
+
+        float p2_x = p1_x + PENDULUM_SCALE * slider_arm2_lenLoc * std::sin(theta2);
+        float p2_y = p1_y + PENDULUM_SCALE * slider_arm2_lenLoc * std::cos(theta2);
+
+        drawList->AddLine(
+            ORIGIN_PIXEL, 
+            ImVec2(p1_x, p1_y), 
+            IM_COL32(0, 0, 255, 255), // Blue
+            3.0f
+        );
+
+        drawList->AddLine(
+            ImVec2(p1_x, p1_y), 
+            ImVec2(p2_x, p2_y), 
+            IM_COL32(255, 0, 0, 255), // Red
+            3.0f
+        );
+
+        // Draw the masses (optional, for visual clarity)
+        drawList->AddCircleFilled(ImVec2(p1_x, p1_y), 5.0f, IM_COL32(255, 255, 255, 255)); // Joint 1
+        drawList->AddCircleFilled(ImVec2(p2_x, p2_y), 5.0f, IM_COL32(255, 255, 255, 255)); // Mass 2
 
         ImGui::End();
 
@@ -389,11 +509,11 @@ int main(int argc, char** argv) {
 
 
         glClear(GL_COLOR_BUFFER_BIT);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0); 
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        // SDL_RenderPresent(renderer);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         SDL_GL_SwapWindow(window);
-
     }
 
     glDeleteProgram(shaderProgram);
