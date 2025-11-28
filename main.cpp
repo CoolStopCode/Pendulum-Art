@@ -8,6 +8,8 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image_write.h"
 
+#include <chrono>
+#include <thread>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -293,7 +295,6 @@ int main(int argc, char** argv) {
                                           1000, 1000,
                                           SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     SDL_GLContext glContext = SDL_GL_CreateContext(window);
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL); 
 
     if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
         std::cerr << "Failed to initialize GLAD" << std::endl;
@@ -347,7 +348,7 @@ int main(int argc, char** argv) {
     GLint arm1_lenLoc = glGetUniformLocation(shaderProgram, "uArm1Length");
     GLint arm2_lenLoc = glGetUniformLocation(shaderProgram, "uArm2Length");
 
-    float slider_gravLoc = -500.0f;
+    float slider_gravLoc = 10.0f;
     float slider_dampingLoc = 0.0f;
     float slider_arm1_lenLoc = 1.0f;
     float slider_arm2_lenLoc = 1.0f;
@@ -360,36 +361,55 @@ int main(int argc, char** argv) {
     float cam_y = 0.0f;
 
     bool live_play = false;
+    bool delta_play = true;
 
     bool running = true;
     SDL_Event e;
 
-    
+    bool wasSpacePressed = false;
+    auto lastFrameTime = std::chrono::high_resolution_clock::now();
     while (running) {
+        auto currentFrameTime = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<float> deltaTime = currentFrameTime - lastFrameTime;
+        float dtSeconds = deltaTime.count();
+
+        lastFrameTime = currentFrameTime;
         if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("W")]) {
-            cam_y += 0.005f * cam_zoom;
+            cam_y += 0.7f * cam_zoom * dtSeconds;
         }
         if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("S")]) {
-            cam_y -= 0.005f * cam_zoom;
+            cam_y -= 0.7f * cam_zoom * dtSeconds;
         }
         if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("A")]) {
-            cam_x -= 0.005f * cam_zoom;
+            cam_x -= 0.7f * cam_zoom * dtSeconds;
         }
         if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("D")]) {
-            cam_x += 0.005f * cam_zoom;
+            cam_x += 0.7f * cam_zoom * dtSeconds;
         }
         if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("Up")]) {
             float old_cam_zoom = cam_zoom;
-            cam_zoom *= 1.01f;
+            cam_zoom += cam_zoom * 1.2f * dtSeconds;
             cam_x += 0.5f * (old_cam_zoom - cam_zoom);
             cam_y += 0.5f * (old_cam_zoom - cam_zoom);
 
         }
         if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("Down")]) {
             float old_cam_zoom = cam_zoom;
-            cam_zoom *= 0.99f;
+            cam_zoom -= cam_zoom * 1.2f * dtSeconds;
             cam_x += 0.5f * (old_cam_zoom - cam_zoom);
             cam_y += 0.5f * (old_cam_zoom - cam_zoom);
+        }
+        if (SDL_GetKeyboardState(nullptr)[SDL_GetScancodeFromName("Space")]) {
+            if (!wasSpacePressed) {
+                wasSpacePressed = true;
+                if (live_play) {
+                    live_play = false;
+                } else {
+                    live_play = true;
+                }
+            }
+        } else {
+            wasSpacePressed = false;
         }
 
         glUniform1f(damping, slider_dampingLoc);
@@ -424,10 +444,9 @@ int main(int argc, char** argv) {
 
         auto [theta1, theta2] = processPendulum(uvx, uvy, slider_gravLoc, slider_dampingLoc, slider_arm1_lenLoc, slider_arm2_lenLoc, cam_zoom, cam_zoom, cam_x, cam_y, slider_time_stepLoc, slider_time_totalLoc);
         std::cout << theta1 << " " << theta2 << "\n";
+        std::cout << "Delta Time: " << dtSeconds << " seconds" << std::endl;
 
         
-
-
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
@@ -437,7 +456,7 @@ int main(int argc, char** argv) {
         ImGui::Begin("Parameters");
         ImGui::Text("ImGui with SDL3 and OpenGL3");
 
-        ImGui::SliderFloat("Gravity", &slider_gravLoc, 5000.0f, -5000.0f, "Value: %1.0f");
+        ImGui::SliderFloat("Gravity", &slider_gravLoc, 500.0f, -500.0f, "Value: %1.0f");
         ImGui::SliderFloat("Time Step (Accuracy)", &slider_time_stepLoc, 0.001f, 0.5f, "Value: %.3f");
         ImGui::SliderFloat("Time Total", &slider_time_totalLoc, 0.01f, 10.0f, "Value: %0.2f");
         ImGui::SliderFloat("Arm1 Length", &slider_arm1_lenLoc, 0.01f, 100.0f, "Value: %.01f");
@@ -445,10 +464,12 @@ int main(int argc, char** argv) {
         ImGui::SliderFloat("Damping", &slider_dampingLoc, -10.0f, 10.0f, "Value: %0.2f");
 
         ImGui::Checkbox("Live Play", &live_play);
+        ImGui::Checkbox("Delta Play", &delta_play);
         if (live_play) {
-            slider_time_totalLoc = slider_time_totalLoc + slider_time_stepLoc;
-            if (slider_time_totalLoc > 10.0f) {
-                slider_time_totalLoc = 0.0f;
+            if (delta_play) {
+                slider_time_totalLoc = slider_time_totalLoc + dtSeconds;
+            } else {
+                slider_time_totalLoc = slider_time_totalLoc + slider_time_stepLoc;
             }
         }
 
@@ -474,15 +495,15 @@ int main(int argc, char** argv) {
         const float PENDULUM_SCALE = 200.0f; 
         ImVec2 ORIGIN_PIXEL = ImVec2(
             windowPos.x + windowSize.x * 0.5f,
-            windowPos.y + windowSize.y * 0.2f
+            windowPos.y + windowSize.y * 0.8f
         ); 
 
 
-        float p1_x = ORIGIN_PIXEL.x + PENDULUM_SCALE * slider_arm1_lenLoc * std::sin(theta1);
-        float p1_y = ORIGIN_PIXEL.y + PENDULUM_SCALE * slider_arm1_lenLoc * std::cos(theta1);
+        float p1_x = ORIGIN_PIXEL.x + PENDULUM_SCALE * slider_arm1_lenLoc * std::sin(theta1) * 0.3f;
+        float p1_y = ORIGIN_PIXEL.y + PENDULUM_SCALE * slider_arm1_lenLoc * std::cos(theta1) * 0.3f;
 
-        float p2_x = p1_x + PENDULUM_SCALE * slider_arm2_lenLoc * std::sin(theta2);
-        float p2_y = p1_y + PENDULUM_SCALE * slider_arm2_lenLoc * std::cos(theta2);
+        float p2_x = p1_x + PENDULUM_SCALE * slider_arm2_lenLoc * std::sin(theta2) * 0.3f;
+        float p2_y = p1_y + PENDULUM_SCALE * slider_arm2_lenLoc * std::cos(theta2) * 0.3f;
 
         drawList->AddLine(
             ORIGIN_PIXEL, 
